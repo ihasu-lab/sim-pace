@@ -33,6 +33,7 @@ type Palette = {
   warnBg: string
   chartFill: string
   chartGrid: string
+  chartHalo: string
 }
 
 /** 壁紙: 既存のダークテーマ */
@@ -49,6 +50,7 @@ const WALL: Palette = {
   warnBg: "rgba(224,80,80,0.18)",
   chartFill: "rgba(95,185,133,0.22)",
   chartGrid: "rgba(255,255,255,0.12)",
+  chartHalo: "#0c1611",
 }
 
 /** ラミネートカード: 印刷向け白地・高コントラスト */
@@ -65,6 +67,7 @@ const PRINT: Palette = {
   warnBg: "#EDEDED",
   chartFill: "rgba(17,17,17,0.08)",
   chartGrid: "#CCCCCC",
+  chartHalo: "#FFFFFF",
 }
 
 type Kind = "wallpaper" | "card"
@@ -214,7 +217,7 @@ function ExportLayout({
 
   const rowH = tight ? 17 : 20
   const scheduleH = 18 + (result.segments.length + 1) * rowH
-  const chartH = isWall ? 132 : 148
+  const chartH = isWall ? 156 : 172
   const aidH = aids.length === 0 ? 0 : 20 + aids.length * 15 + 10
   const rightH = 52 + 8 + (chartH + 22) + (aidH > 0 ? 8 + aidH : 0)
   const height = isWall ? 720 : 12 + 22 + 8 + Math.max(scheduleH, rightH, 220) + 24
@@ -224,7 +227,8 @@ function ExportLayout({
     fill: P.chartFill,
     grid: P.chartGrid,
     marker: P.accent,
-    text: P.muted,
+    text: P.text,
+    halo: P.chartHalo,
   }
 
   const timeLabel = isReverse ? t(lang, "targetFinish") : t(lang, "estFinish")

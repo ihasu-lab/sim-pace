@@ -13,6 +13,7 @@ interface ElevationChartProps {
     grid: string
     marker: string
     text: string
+    halo?: string
   }
   className?: string
   /** 通過ポイント名と距離・標高をマーカーに表示（書き出し用） */
@@ -26,6 +27,7 @@ const DEFAULT_COLORS = {
   grid: "var(--color-border)",
   marker: "var(--color-accent)",
   text: "var(--color-muted-foreground)",
+  halo: "var(--color-background)",
 }
 
 /**
@@ -43,12 +45,13 @@ export function ElevationChart({
   showWaypointDetails = false,
   waypointLabel,
 }: ElevationChartProps) {
-  const width = 600
+  // 書き出し枠は横長になりやすいので viewBox 幅を抑えて縦方向を使い切る
+  const width = showWaypointDetails ? 400 : 580
   const pad = {
-    top: showWaypointDetails ? 36 : 14,
-    right: 16,
-    bottom: 22,
-    left: 40,
+    top: showWaypointDetails ? 46 : 12,
+    right: 14,
+    bottom: 20,
+    left: 36,
   }
 
   const pts = buildPoints(profile, distanceKm, elevationGainM)
@@ -56,10 +59,11 @@ export function ElevationChart({
   const rawMin = Math.min(...pts.map((p) => p.e))
   const rawMax = Math.max(...pts.map((p) => p.e))
   const rawRange = rawMax - rawMin || 100
-  const yStep = niceStep(rawRange, 4)
-  const minEle = Math.floor(rawMin / yStep) * yStep
-  const maxEle = Math.max(minEle + yStep, Math.ceil(rawMax / yStep) * yStep)
-  const eleRange = maxEle - minEle
+  const head = rawRange * 0.04
+  const minEle = rawMin >= 0 && rawMin <= head * 2 ? 0 : rawMin - head
+  const maxEle = rawMax + head
+  const eleRange = maxEle - minEle || 1
+  const yStep = niceStep(eleRange, 4)
   const xStep = niceDistanceStep(maxDist)
 
   const x = (d: number) =>
@@ -83,8 +87,8 @@ export function ElevationChart({
     <svg
       viewBox={`0 0 ${width} ${height}`}
       className={className}
-      preserveAspectRatio="xMidYMid meet"
-      style={{ width: "100%", height }}
+      preserveAspectRatio="none"
+      style={{ width: "100%", height, display: "block" }}
       role="img"
       aria-label="Elevation profile"
     >
@@ -104,7 +108,7 @@ export function ElevationChart({
             textAnchor="end"
             dominantBaseline="middle"
             fill={colors.text}
-            fontSize={9}
+            fontSize={10}
             fontFamily="ui-monospace, monospace"
           >
             {formatEle(ele)}
@@ -127,7 +131,7 @@ export function ElevationChart({
             y={height - 4}
             textAnchor="middle"
             fill={colors.text}
-            fontSize={9}
+            fontSize={10}
             fontFamily="ui-monospace, monospace"
           >
             {formatKm(d)}
@@ -178,34 +182,44 @@ export function ElevationChart({
         const ele = eleAt(pts, w.distanceKm)
         const py = y(ele)
         const name = waypointLabel ? waypointLabel(w) : w.name
-        const anchor = px < plotLeft + 48 ? "start" : px > plotRight - 48 ? "end" : "middle"
-        const tx = anchor === "start" ? px + 3 : anchor === "end" ? px - 3 : px
-        const lift = showWaypointDetails ? 8 + (i % 3) * 12 : 0
+        const anchor = px < plotLeft + 52 ? "start" : px > plotRight - 52 ? "end" : "middle"
+        const tx = anchor === "start" ? px + 4 : anchor === "end" ? px - 4 : px
+        const labelY = 13 + (i % 2) * 20
+        const halo = colors.halo ?? "rgba(0,0,0,0.75)"
         return (
           <g key={w.id}>
             <line
               x1={px}
-              y1={py}
+              y1={showWaypointDetails ? labelY + 16 : py}
               x2={px}
               y2={plotBottom}
               stroke={colors.grid}
               strokeWidth={1}
               strokeDasharray="3 3"
             />
-            <circle cx={px} cy={py} r={3.5} fill={colors.marker} />
+            <circle cx={px} cy={py} r={4} fill={colors.marker} stroke={halo} strokeWidth={1} />
             {showWaypointDetails ? (
               <text
                 x={tx}
-                y={Math.max(10, py - lift)}
+                y={labelY}
                 textAnchor={anchor}
                 fill={colors.text}
-                fontSize={8}
+                stroke={halo}
+                strokeWidth={3.5}
+                paintOrder="stroke fill"
+                fontSize={11}
                 fontFamily="ui-sans-serif, system-ui, sans-serif"
               >
                 <tspan x={tx} dy="0" fontWeight={700}>
-                  {truncate(name, 12)}
+                  {truncate(name, 14)}
                 </tspan>
-                <tspan x={tx} dy="9" fontFamily="ui-monospace, monospace">
+                <tspan
+                  x={tx}
+                  dy="12"
+                  fontSize={10}
+                  fontFamily="ui-monospace, monospace"
+                  fontWeight={600}
+                >
                   {formatKm(w.distanceKm)}km / {formatEle(ele)}m
                 </tspan>
               </text>
@@ -260,9 +274,7 @@ function buildTicks(min: number, max: number, step: number): number[] {
   for (let v = start; v <= max + 1e-6; v += step) {
     out.push(Number(v.toFixed(8)))
   }
-  if (out.length === 0 || out[0] > min + 1e-6) out.unshift(min)
-  if (out[out.length - 1] < max - 1e-6) out.push(max)
-  return out
+  return out.length > 0 ? out : [min, max]
 }
 
 function eleAt(pts: { d: number; e: number }[], d: number): number {
