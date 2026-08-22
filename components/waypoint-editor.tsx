@@ -92,9 +92,9 @@ export function WaypointEditor({ waypoints, onChange, lang }: WaypointEditorProp
                   <Input
                     aria-label={`${t(lang, "wpDistance")} (km)`}
                     type="number"
-                    inputMode="numeric"
+                    inputMode="decimal"
                     min="0"
-                    step="1"
+                    step="0.01"
                     value={Number.isFinite(w.distanceKm) ? String(w.distanceKm) : ""}
                     onChange={(e) =>
                       update(w.id, {

@@ -138,10 +138,10 @@ export function BPlanPanel({ state, lang }: BPlanPanelProps) {
             <Input
               id="bplan-km"
               type="number"
-              inputMode="numeric"
+              inputMode="decimal"
               min="0"
-              step="1"
-              placeholder="20"
+              step="0.01"
+              placeholder="20.00"
               value={currentKm}
               onChange={(e) => setCurrentKm(e.target.value)}
               className="h-12 pl-10 pr-9 text-base"

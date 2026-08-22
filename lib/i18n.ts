@@ -185,6 +185,8 @@ const DICT: Dict = {
   raceSchedule: { ja: "レーススケジュール", en: "Race Schedule" },
   memo: { ja: "メモ", en: "Memo" },
   downloadPng: { ja: "PNGを保存", en: "Download PNG" },
+  saveHint: { ja: "画像を長押しして保存", en: "Long press image to save" },
+  openInTab: { ja: "新しいタブで開く", en: "Open in new tab" },
   close: { ja: "閉じる", en: "Close" },
   preview: { ja: "プレビュー", en: "Preview" },
 

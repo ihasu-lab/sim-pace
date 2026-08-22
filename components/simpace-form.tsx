@@ -215,10 +215,10 @@ export function SimPaceForm({ value, onPatch, onCalculate }: SimPaceFormProps) {
             <Input
               id="distance"
               type="number"
-              inputMode="numeric"
+              inputMode="decimal"
               min="0"
-              step="1"
-              placeholder="42"
+              step="0.01"
+              placeholder="42.00"
               value={distance}
               onChange={(e) => onPatch({ distance: e.target.value })}
               aria-invalid={errors.distance}

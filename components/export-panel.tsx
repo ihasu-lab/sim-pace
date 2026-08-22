@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react"
 import { toPng } from "html-to-image"
-import { Smartphone, IdCard, Download, X, Loader2 } from "lucide-react"
+import { Smartphone, IdCard, Download, X, Loader2, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ElevationChart } from "@/components/elevation-chart"
 import {
@@ -72,6 +72,26 @@ const PRINT: Palette = {
 
 type Kind = "wallpaper" | "card"
 
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") return false
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+}
+
+function tryDownload(url: string, filename: string) {
+  try {
+    if (isMobileBrowser()) return
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    a.rel = "noopener"
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } catch {
+    // Mobile / in-app browsers often ignore a.download
+  }
+}
+
 export function ExportPanel({ result, state, lang }: ExportPanelProps) {
   const wallpaperRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -89,6 +109,10 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
         backgroundColor: kind === "card" ? PRINT.bg : WALL.bg,
       })
       setPreview({ url, kind })
+      tryDownload(
+        url,
+        `simpace-${kind}-${new Date().toISOString().slice(0, 10)}.png`,
+      )
     } catch {
       alert(t(lang, "exportFail"))
     } finally {
@@ -96,12 +120,22 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
     }
   }
 
+  const fileName = preview
+    ? `simpace-${preview.kind}-${new Date().toISOString().slice(0, 10)}.png`
+    : "simpace.png"
+
   const download = () => {
     if (!preview) return
-    const a = document.createElement("a")
-    a.href = preview.url
-    a.download = `simpace-${preview.kind}-${new Date().toISOString().slice(0, 10)}.png`
-    a.click()
+    if (isMobileBrowser()) {
+      openTab()
+      return
+    }
+    tryDownload(preview.url, fileName)
+  }
+
+  const openTab = () => {
+    if (!preview) return
+    window.open(preview.url, "_blank", "noopener")
   }
 
   return (
@@ -137,33 +171,43 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
         </Button>
       </div>
 
-      {/* プレビュー用モーダル */}
+      {/* プレビュー用モーダル（モバイルは長押し保存） */}
       {preview ? (
         <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/90 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/90 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           onClick={() => setPreview(null)}
         >
+          <p
+            className="rounded-full bg-primary px-4 py-1.5 text-center text-sm font-semibold text-primary-foreground shadow-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t(lang, "saveHint")}
+          </p>
           <div
             className={
               preview.kind === "wallpaper"
-                ? "flex aspect-[9/16] h-[min(78vh,calc((100vw-2rem)*16/9))] max-h-[78vh] overflow-hidden rounded-[1.35rem] border border-border shadow-2xl"
-                : "flex max-h-[78vh] w-full max-w-3xl overflow-hidden rounded-xl border border-border shadow-2xl"
+                ? "flex aspect-[9/16] h-[min(70vh,calc((100vw-2rem)*16/9))] max-h-[70vh] overflow-hidden rounded-[1.35rem] border border-border bg-black shadow-2xl"
+                : "flex max-h-[70vh] w-full max-w-3xl overflow-hidden rounded-xl border border-border bg-white shadow-2xl"
             }
             onClick={(e) => e.stopPropagation()}
           >
-            {/* biome-ignore lint/a11y/useAltText: プレビュー画像 */}
             <img
-              src={preview.url || "/placeholder.svg"}
+              src={preview.url}
               alt={t(lang, "preview")}
               className="h-full w-full object-contain"
+              style={{ WebkitTouchCallout: "default", WebkitUserSelect: "auto" }}
             />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button onClick={download} className="gap-2">
               <Download className="size-4" />
               {t(lang, "downloadPng")}
+            </Button>
+            <Button variant="outline" onClick={openTab} className="gap-2 bg-transparent">
+              <ExternalLink className="size-4" />
+              {t(lang, "openInTab")}
             </Button>
             <Button variant="outline" onClick={() => setPreview(null)} className="gap-2 bg-transparent">
               <X className="size-4" />

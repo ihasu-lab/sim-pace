@@ -81,7 +81,7 @@ export function parseGpx(xml: string): GpxData {
 
   return {
     name,
-    distanceKm: Math.round((cumDist / 1000) * 10) / 10,
+    distanceKm: Math.round((cumDist / 1000) * 100) / 100,
     elevationGainM: Math.round(gain),
     profile,
   }
