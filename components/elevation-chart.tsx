@@ -19,6 +19,8 @@ interface ElevationChartProps {
   /** 通過ポイント名と距離・標高をマーカーに表示（書き出し用） */
   showWaypointDetails?: boolean
   waypointLabel?: (w: Waypoint) => string
+  /** 壁紙中央ゾーン向け: ラベルとプロット余白を圧縮 */
+  compact?: boolean
 }
 
 const DEFAULT_COLORS = {
@@ -44,15 +46,27 @@ export function ElevationChart({
   className,
   showWaypointDetails = false,
   waypointLabel,
+  compact = false,
 }: ElevationChartProps) {
   // 書き出し枠は横長になりやすいので viewBox 幅を抑えて縦方向を使い切る
   const width = showWaypointDetails ? 400 : 580
-  const pad = {
-    top: showWaypointDetails ? 46 : 12,
-    right: 14,
-    bottom: 20,
-    left: 36,
-  }
+  const pad = compact
+    ? {
+        top: showWaypointDetails ? 20 : 8,
+        right: 22,
+        bottom: 14,
+        left: 30,
+      }
+    : {
+        top: showWaypointDetails ? 46 : 12,
+        right: 14,
+        bottom: 20,
+        left: 36,
+      }
+  const tickFont = compact ? 8 : 10
+  const labelFont = compact ? 9 : 11
+  const labelSubFont = compact ? 8 : 10
+  const markR = compact ? 3 : 4
 
   const pts = buildPoints(profile, distanceKm, elevationGainM)
   const maxDist = pts[pts.length - 1]?.d || distanceKm || 1
@@ -108,7 +122,7 @@ export function ElevationChart({
             textAnchor="end"
             dominantBaseline="middle"
             fill={colors.text}
-            fontSize={10}
+            fontSize={tickFont}
             fontFamily="ui-monospace, monospace"
           >
             {formatEle(ele)}
@@ -131,7 +145,7 @@ export function ElevationChart({
             y={height - 4}
             textAnchor="middle"
             fill={colors.text}
-            fontSize={10}
+            fontSize={tickFont}
             fontFamily="ui-monospace, monospace"
           >
             {formatKm(d)}
@@ -157,7 +171,7 @@ export function ElevationChart({
       />
       <text
         x={10}
-        y={plotTop - 3}
+        y={Math.max(plotTop - 3, tickFont + 1)}
         fill={colors.text}
         fontSize={8}
         fontFamily="ui-sans-serif, system-ui, sans-serif"
@@ -165,8 +179,9 @@ export function ElevationChart({
         m
       </text>
       <text
-        x={plotRight + 2}
-        y={height - 4}
+        x={width - 4}
+        y={height - 3}
+        textAnchor="end"
         fill={colors.text}
         fontSize={8}
         fontFamily="ui-sans-serif, system-ui, sans-serif"
@@ -182,47 +197,65 @@ export function ElevationChart({
         const ele = eleAt(pts, w.distanceKm)
         const py = y(ele)
         const name = waypointLabel ? waypointLabel(w) : w.name
-        const anchor = px < plotLeft + 52 ? "start" : px > plotRight - 52 ? "end" : "middle"
+        const edge = compact ? 40 : 52
+        const anchor = px < plotLeft + edge ? "start" : px > plotRight - edge ? "end" : "middle"
         const tx = anchor === "start" ? px + 4 : anchor === "end" ? px - 4 : px
-        const labelY = 13 + (i % 2) * 20
+        const labelY = compact ? 9 + (i % 2) * 9 : 13 + (i % 2) * 20
         const halo = colors.halo ?? "rgba(0,0,0,0.75)"
         return (
           <g key={w.id}>
             <line
               x1={px}
-              y1={showWaypointDetails ? labelY + 16 : py}
+              y1={showWaypointDetails ? labelY + (compact ? 3 : 16) : py}
               x2={px}
               y2={plotBottom}
               stroke={colors.grid}
               strokeWidth={1}
               strokeDasharray="3 3"
             />
-            <circle cx={px} cy={py} r={4} fill={colors.marker} stroke={halo} strokeWidth={1} />
+            <circle cx={px} cy={py} r={markR} fill={colors.marker} stroke={halo} strokeWidth={1} />
             {showWaypointDetails ? (
-              <text
-                x={tx}
-                y={labelY}
-                textAnchor={anchor}
-                fill={colors.text}
-                stroke={halo}
-                strokeWidth={3.5}
-                paintOrder="stroke fill"
-                fontSize={11}
-                fontFamily="ui-sans-serif, system-ui, sans-serif"
-              >
-                <tspan x={tx} dy="0" fontWeight={700}>
-                  {truncate(name, 14)}
-                </tspan>
-                <tspan
+              compact ? (
+                <text
                   x={tx}
-                  dy="12"
-                  fontSize={10}
-                  fontFamily="ui-monospace, monospace"
-                  fontWeight={600}
+                  y={labelY}
+                  textAnchor={anchor}
+                  fill={colors.text}
+                  stroke={halo}
+                  strokeWidth={2.5}
+                  paintOrder="stroke fill"
+                  fontSize={labelFont}
+                  fontFamily="ui-sans-serif, system-ui, sans-serif"
+                  fontWeight={700}
                 >
-                  {formatKm(w.distanceKm)}km / {formatEle(ele)}m
-                </tspan>
-              </text>
+                  {truncate(name, 8)} {formatKm(w.distanceKm)}km
+                </text>
+              ) : (
+                <text
+                  x={tx}
+                  y={labelY}
+                  textAnchor={anchor}
+                  fill={colors.text}
+                  stroke={halo}
+                  strokeWidth={3.5}
+                  paintOrder="stroke fill"
+                  fontSize={labelFont}
+                  fontFamily="ui-sans-serif, system-ui, sans-serif"
+                >
+                  <tspan x={tx} dy="0" fontWeight={700}>
+                    {truncate(name, 14)}
+                  </tspan>
+                  <tspan
+                    x={tx}
+                    dy="12"
+                    fontSize={labelSubFont}
+                    fontFamily="ui-monospace, monospace"
+                    fontWeight={600}
+                  >
+                    {formatKm(w.distanceKm)}km / {formatEle(ele)}m
+                  </tspan>
+                </text>
+              )
             ) : null}
           </g>
         )
