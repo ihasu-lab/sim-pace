@@ -20,8 +20,23 @@ interface ExportPanelProps {
   lang: Lang
 }
 
-// エクスポート専用のダークパレット（CSS変数を使わず確実に描画）
-const C = {
+type Palette = {
+  bg: string
+  card: string
+  primary: string
+  accent: string
+  text: string
+  muted: string
+  border: string
+  headerBg: string
+  altBg: string
+  warnBg: string
+  chartFill: string
+  chartGrid: string
+}
+
+/** 壁紙: 既存のダークテーマ */
+const WALL: Palette = {
   bg: "#111d17",
   card: "#1b2a22",
   primary: "#5fb985",
@@ -29,6 +44,27 @@ const C = {
   text: "#eef4ee",
   muted: "#9fb3a6",
   border: "rgba(255,255,255,0.12)",
+  headerBg: "rgba(255,255,255,0.06)",
+  altBg: "rgba(255,255,255,0.03)",
+  warnBg: "rgba(224,80,80,0.18)",
+  chartFill: "rgba(95,185,133,0.22)",
+  chartGrid: "rgba(255,255,255,0.12)",
+}
+
+/** ラミネートカード: 印刷向け白地・高コントラスト */
+const PRINT: Palette = {
+  bg: "#FFFFFF",
+  card: "#FFFFFF",
+  primary: "#111111",
+  accent: "#111111",
+  text: "#111111",
+  muted: "#333333",
+  border: "#333333",
+  headerBg: "#F3F3F3",
+  altBg: "#F7F7F7",
+  warnBg: "#EDEDED",
+  chartFill: "rgba(17,17,17,0.08)",
+  chartGrid: "#CCCCCC",
 }
 
 type Kind = "wallpaper" | "card"
@@ -47,7 +83,7 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
       const url = await toPng(node, {
         pixelRatio: kind === "wallpaper" ? 3 : 2.5,
         cacheBust: true,
-        backgroundColor: C.bg,
+        backgroundColor: kind === "card" ? PRINT.bg : WALL.bg,
       })
       setPreview({ url, kind })
     } catch {
@@ -162,6 +198,7 @@ function ExportLayout({
   lang: Lang
 }) {
   const isWall = kind === "wallpaper"
+  const P = isWall ? WALL : PRINT
   // Wallpaper is a true 9:16 phone frame. Card height is computed from content
   // so the laminated preview is never clipped.
   const width = isWall ? 405 : 720
@@ -182,11 +219,11 @@ function ExportLayout({
   const height = isWall ? 720 : 12 + 22 + 8 + Math.max(scheduleH, rightH, 220) + 24
 
   const chartColors = {
-    line: C.primary,
-    fill: "rgba(95,185,133,0.22)",
-    grid: C.border,
-    marker: C.accent,
-    text: C.muted,
+    line: P.primary,
+    fill: P.chartFill,
+    grid: P.chartGrid,
+    marker: P.accent,
+    text: P.muted,
   }
 
   const timeLabel = isReverse ? t(lang, "targetFinish") : t(lang, "estFinish")
@@ -198,7 +235,7 @@ function ExportLayout({
     : [t(lang, "colPoint"), t(lang, "colPass"), t(lang, "colGap")]
 
   const schedule = (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: isWall ? undefined : 1 }}>
       <div
         style={{
           fontSize: 11,
@@ -210,7 +247,7 @@ function ExportLayout({
         {scheduleTitle}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        <Row cells={headerCells} header hasCutoff={hasCutoff} tight={tight} />
+        <Row cells={headerCells} header hasCutoff={hasCutoff} tight={tight} palette={P} />
         {result.segments.map((s, i) => {
           const stay =
             s.stayMin > 0 ? ` · ${t(lang, "stay")}${s.stayMin}${t(lang, "minute")}` : ""
@@ -231,6 +268,7 @@ function ExportLayout({
               tight={tight}
               warn={s.marginSec !== null && s.marginSec < 0}
               alt={i % 2 === 1}
+              palette={P}
             />
           )
         })}
@@ -241,13 +279,13 @@ function ExportLayout({
   const profile = (
     <div
       style={{
-        background: C.card,
+        background: P.card,
         borderRadius: 10,
         padding: isWall ? "6px 8px 4px" : "6px 8px 4px",
-        border: `1px solid ${C.border}`,
+        border: `1px solid ${P.border}`,
       }}
     >
-      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2, fontWeight: 700 }}>
+      <div style={{ fontSize: 10, color: P.muted, marginBottom: 2, fontWeight: 700 }}>
         {t(lang, "elevationProfile")}
       </div>
       <ElevationChart
@@ -267,33 +305,34 @@ function ExportLayout({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background: C.card,
+        background: P.card,
         borderRadius: 10,
         padding: isWall ? "8px 12px" : "8px 12px",
-        border: `1px solid ${C.border}`,
+        border: `1px solid ${P.border}`,
         gap: 12,
       }}
     >
       <div>
-        <div style={{ fontSize: 9, color: C.muted, lineHeight: 1.2 }}>{timeLabel}</div>
+        <div style={{ fontSize: 9, color: P.muted, lineHeight: 1.2 }}>{timeLabel}</div>
         <div
           style={{
             fontSize: isWall ? 26 : 22,
             fontWeight: 800,
             fontFamily: "var(--font-geist-mono), monospace",
             lineHeight: 1.15,
+            color: P.text,
           }}
         >
           {formatDuration(result.totalSec, lang)}
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: 9, color: C.muted, lineHeight: 1.2 }}>{gapLabel}</div>
+        <div style={{ fontSize: 9, color: P.muted, lineHeight: 1.2 }}>{gapLabel}</div>
         <div
           style={{
             fontSize: isWall ? 16 : 15,
             fontWeight: 700,
-            color: C.primary,
+            color: P.primary,
             fontFamily: "var(--font-geist-mono), monospace",
             lineHeight: 1.15,
           }}
@@ -304,119 +343,154 @@ function ExportLayout({
     </div>
   )
 
+  const header = (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background: P.primary,
+            display: "inline-block",
+          }}
+        />
+        <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.3, color: P.text }}>
+          SimPace
+        </span>
+        <span style={{ fontSize: 10, color: P.muted }}>{t(lang, "raceSchedule")}</span>
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          fontFamily: "var(--font-geist-mono), monospace",
+          color: P.text,
+        }}
+      >
+        {distanceKm} km / +{Math.round(elevationGainM)} m
+      </div>
+    </div>
+  )
+
+  const footer = (
+    <div style={{ fontSize: 8, color: P.muted, textAlign: "center", lineHeight: 1 }}>
+      Generated by SimPace · {new Date().toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US")}
+    </div>
+  )
+
+  const body = isWall ? (
+    <>
+      {timeStrip}
+      {profile}
+      {schedule}
+    </>
+  ) : (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1.35fr 1fr",
+        gap: 8,
+        alignItems: "stretch",
+        minHeight: 0,
+        flex: 1,
+      }}
+    >
+      {schedule}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+        {timeStrip}
+        {profile}
+        {aids.length > 0 ? (
+          <div
+            style={{
+              background: P.card,
+              borderRadius: 10,
+              padding: "6px 8px",
+              border: `1px solid ${P.border}`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+            }}
+          >
+            <div style={{ fontSize: 10, color: P.muted, fontWeight: 700 }}>
+              {t(lang, "aidInfo")}
+            </div>
+            {aids.map((w) => (
+              <div
+                key={w.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  fontSize: 10,
+                  lineHeight: 1.25,
+                  color: P.text,
+                }}
+              >
+                <span style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {localizeName(lang, w.name)}
+                </span>
+                <span
+                  style={{
+                    color: P.muted,
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    flexShrink: 0,
+                  }}
+                >
+                  {w.distanceKm}km · {w.stayMin ?? 0}
+                  {t(lang, "minute")}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+
   return (
     <div
       style={{
         width,
         height,
-        background: `linear-gradient(160deg, ${C.bg} 0%, #0c1611 100%)`,
-        color: C.text,
+        background: isWall
+          ? `linear-gradient(160deg, ${P.bg} 0%, #0c1611 100%)`
+          : P.bg,
+        color: P.text,
         fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
-        padding: isWall ? 14 : 12,
+        padding: isWall ? 0 : 12,
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: isWall ? 0 : 8,
         boxSizing: "border-box",
         overflow: "hidden",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: 999,
-              background: C.primary,
-              display: "inline-block",
-            }}
-          />
-          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.3 }}>SimPace</span>
-          <span style={{ fontSize: 10, color: C.muted }}>{t(lang, "raceSchedule")}</span>
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            fontFamily: "var(--font-geist-mono), monospace",
-            color: C.text,
-          }}
-        >
-          {distanceKm} km / +{Math.round(elevationGainM)} m
-        </div>
-      </div>
-
       {isWall ? (
-        <>
-          {timeStrip}
-          {profile}
-          {schedule}
-        </>
-      ) : (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1.35fr 1fr",
-            gap: 8,
-            alignItems: "stretch",
-            minHeight: 0,
             flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            // Lock-screen safe zones: clock/Dynamic Island on top, home bar/widgets below
+            padding: "132px 16px 100px",
+            gap: 8,
+            boxSizing: "border-box",
           }}
         >
-          {schedule}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
-            {timeStrip}
-            {profile}
-            {aids.length > 0 ? (
-              <div
-                style={{
-                  background: C.card,
-                  borderRadius: 10,
-                  padding: "6px 8px",
-                  border: `1px solid ${C.border}`,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                }}
-              >
-                <div style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>
-                  {t(lang, "aidInfo")}
-                </div>
-                {aids.map((w) => (
-                  <div
-                    key={w.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      fontSize: 10,
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    <span style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {localizeName(lang, w.name)}
-                    </span>
-                    <span
-                      style={{
-                        color: C.muted,
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {w.distanceKm}km · {w.stayMin ?? 0}
-                      {t(lang, "minute")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          {header}
+          {body}
+          {footer}
         </div>
+      ) : (
+        <>
+          {header}
+          {body}
+          {footer}
+        </>
       )}
-
-      <div style={{ fontSize: 8, color: C.muted, textAlign: "center", lineHeight: 1 }}>
-        Generated by SimPace · {new Date().toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US")}
-      </div>
     </div>
   )
 }
@@ -428,6 +502,7 @@ function Row({
   alt,
   hasCutoff,
   tight,
+  palette: P,
 }: {
   cells: string[]
   header?: boolean
@@ -435,6 +510,7 @@ function Row({
   alt?: boolean
   hasCutoff: boolean
   tight?: boolean
+  palette: Palette
 }) {
   return (
     <div
@@ -445,14 +521,14 @@ function Row({
         padding: tight ? "2px 6px" : "3px 6px",
         borderRadius: 4,
         background: header
-          ? "rgba(255,255,255,0.06)"
+          ? P.headerBg
           : warn
-            ? "rgba(224,80,80,0.18)"
+            ? P.warnBg
             : alt
-              ? "rgba(255,255,255,0.03)"
+              ? P.altBg
               : "transparent",
         fontSize: header ? 9 : tight ? 10 : 11,
-        color: header ? C.muted : C.text,
+        color: header ? P.muted : P.text,
         fontWeight: header ? 700 : 500,
         lineHeight: 1.25,
       }}
@@ -466,7 +542,7 @@ function Row({
           style={{
             textAlign: "right",
             fontFamily: "var(--font-geist-mono), monospace",
-            color: i === cells.length - 2 ? C.primary : i === 1 && hasCutoff ? C.muted : C.text,
+            color: i === cells.length - 2 ? P.primary : i === 1 && hasCutoff ? P.muted : P.text,
             fontVariantNumeric: "tabular-nums",
           }}
         >
