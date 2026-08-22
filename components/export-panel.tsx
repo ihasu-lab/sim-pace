@@ -72,6 +72,36 @@ const PRINT: Palette = {
 
 type Kind = "wallpaper" | "card"
 
+/** Strict 9:16 lock-screen canvas (same ratio as 1080×1920). Captured at 3× → 1215×2160. */
+const WALL_WIDTH = 405
+const WALL_HEIGHT = 720
+const WALL_PAD_X = 0.12
+const WALL_SAFE_TOP = 0.3
+const WALL_SAFE_BOTTOM = 0.15
+const WALL_CONTENT_H = 1 - WALL_SAFE_TOP - WALL_SAFE_BOTTOM
+
+function wallpaperFit(segmentCount: number, zoneH: number) {
+  const headerH = 16
+  const timeH = 42
+  const footerH = 10
+  const gap = 5
+  const gaps = gap * 4
+  const profileChrome = 18
+  const schedTitle = 14
+  const rows = Math.max(segmentCount, 1) + 1
+  const chrome = headerH + timeH + footerH + gaps + profileChrome + schedTitle
+
+  let chartH = 96
+  let rowH = 15
+  const used = () => chrome + chartH + rows * rowH
+  while (used() > zoneH && chartH > 68) chartH -= 2
+  while (used() > zoneH && rowH > 12) rowH -= 1
+  if (used() > zoneH) {
+    chartH = Math.max(60, chartH - (used() - zoneH))
+  }
+  return { chartH, rowH, gap }
+}
+
 function isMobileBrowser() {
   if (typeof navigator === "undefined") return false
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -107,6 +137,9 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
         pixelRatio: kind === "wallpaper" ? 3 : 2.5,
         cacheBust: true,
         backgroundColor: kind === "card" ? PRINT.bg : WALL.bg,
+        ...(kind === "wallpaper"
+          ? { width: WALL_WIDTH, height: WALL_HEIGHT }
+          : {}),
       })
       setPreview({ url, kind })
       tryDownload(
@@ -222,7 +255,7 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
         aria-hidden="true"
         style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}
       >
-        <div ref={wallpaperRef} style={{ width: 405 }}>
+        <div ref={wallpaperRef} style={{ width: WALL_WIDTH }}>
           <ExportLayout kind="wallpaper" result={result} state={state} lang={lang} />
         </div>
         <div ref={cardRef} style={{ width: 720 }}>
@@ -248,12 +281,15 @@ function ExportLayout({
   const P = isWall ? WALL : PRINT
   // Wallpaper is a true 9:16 phone frame. Card height is computed from content
   // so the laminated preview is never clipped.
-  const width = isWall ? 405 : 720
+  const width = isWall ? WALL_WIDTH : 720
   const distanceKm = Number.parseFloat(state.distance) || 0
   const elevationGainM = Number.parseFloat(state.elevation) || 0
   const isReverse = result.mode === "reverse"
   const hasCutoff = result.segments.some((s) => s.cutoffSec !== null)
   const tight = result.segments.length > 8
+  const wallFit = isWall
+    ? wallpaperFit(result.segments.length, WALL_HEIGHT * WALL_CONTENT_H)
+    : null
 
   const aids = state.waypoints
     .filter((w) => w.distanceKm > 0 && w.distanceKm < distanceKm)
@@ -261,10 +297,10 @@ function ExportLayout({
 
   const rowH = tight ? 17 : 20
   const scheduleH = 18 + (result.segments.length + 1) * rowH
-  const chartH = isWall ? 156 : 172
+  const chartH = isWall ? wallFit!.chartH : 172
   const aidH = aids.length === 0 ? 0 : 20 + aids.length * 15 + 10
   const rightH = 52 + 8 + (chartH + 22) + (aidH > 0 ? 8 + aidH : 0)
-  const height = isWall ? 720 : 12 + 22 + 8 + Math.max(scheduleH, rightH, 220) + 24
+  const height = isWall ? WALL_HEIGHT : 12 + 22 + 8 + Math.max(scheduleH, rightH, 220) + 24
 
   const chartColors = {
     line: P.primary,
@@ -284,19 +320,37 @@ function ExportLayout({
     : [t(lang, "colPoint"), t(lang, "colPass"), t(lang, "colGap")]
 
   const schedule = (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: isWall ? undefined : 1 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        flex: 1,
+        overflow: "hidden",
+      }}
+    >
       <div
         style={{
-          fontSize: 11,
+          fontSize: isWall ? 10 : 11,
           fontWeight: 700,
-          marginBottom: 4,
+          marginBottom: isWall ? 2 : 4,
           letterSpacing: 0.2,
+          flexShrink: 0,
+          lineHeight: 1.2,
         }}
       >
         {scheduleTitle}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        <Row cells={headerCells} header hasCutoff={hasCutoff} tight={tight} palette={P} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 0, minHeight: 0 }}>
+        <Row
+          cells={headerCells}
+          header
+          hasCutoff={hasCutoff}
+          tight={tight}
+          compact={isWall}
+          rowHeight={wallFit?.rowH}
+          palette={P}
+        />
         {result.segments.map((s, i) => {
           const stay =
             s.stayMin > 0 ? ` · ${t(lang, "stay")}${s.stayMin}${t(lang, "minute")}` : ""
@@ -315,6 +369,8 @@ function ExportLayout({
               cells={cells}
               hasCutoff={hasCutoff}
               tight={tight}
+              compact={isWall}
+              rowHeight={wallFit?.rowH}
               warn={s.marginSec !== null && s.marginSec < 0}
               alt={i % 2 === 1}
               palette={P}
@@ -330,11 +386,14 @@ function ExportLayout({
       style={{
         background: P.card,
         borderRadius: 10,
-        padding: isWall ? "6px 8px 4px" : "6px 8px 4px",
+        padding: isWall ? "4px 6px 2px" : "6px 8px 4px",
         border: `1px solid ${P.border}`,
+        flexShrink: 0,
+        minWidth: 0,
+        overflow: "hidden",
       }}
     >
-      <div style={{ fontSize: 10, color: P.muted, marginBottom: 2, fontWeight: 700 }}>
+      <div style={{ fontSize: isWall ? 9 : 10, color: P.muted, marginBottom: isWall ? 1 : 2, fontWeight: 700, lineHeight: 1.2 }}>
         {t(lang, "elevationProfile")}
       </div>
       <ElevationChart
@@ -345,6 +404,7 @@ function ExportLayout({
         height={chartH}
         colors={chartColors}
         showWaypointDetails
+        compact={isWall}
         waypointLabel={(w) => localizeName(lang, w.name)}
       />
     </div>
@@ -358,34 +418,36 @@ function ExportLayout({
         justifyContent: "space-between",
         background: P.card,
         borderRadius: 10,
-        padding: isWall ? "8px 12px" : "8px 12px",
+        padding: isWall ? "5px 8px" : "8px 12px",
         border: `1px solid ${P.border}`,
-        gap: 12,
+        gap: isWall ? 8 : 12,
+        flexShrink: 0,
+        minWidth: 0,
       }}
     >
-      <div>
-        <div style={{ fontSize: 9, color: P.muted, lineHeight: 1.2 }}>{timeLabel}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: isWall ? 8 : 9, color: P.muted, lineHeight: 1.15 }}>{timeLabel}</div>
         <div
           style={{
-            fontSize: isWall ? 26 : 22,
+            fontSize: isWall ? 20 : 22,
             fontWeight: 800,
             fontFamily: "var(--font-geist-mono), monospace",
-            lineHeight: 1.15,
+            lineHeight: 1.1,
             color: P.text,
           }}
         >
           {formatDuration(result.totalSec, lang)}
         </div>
       </div>
-      <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: 9, color: P.muted, lineHeight: 1.2 }}>{gapLabel}</div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: isWall ? 8 : 9, color: P.muted, lineHeight: 1.15 }}>{gapLabel}</div>
         <div
           style={{
-            fontSize: isWall ? 16 : 15,
+            fontSize: isWall ? 13 : 15,
             fontWeight: 700,
             color: P.primary,
             fontFamily: "var(--font-geist-mono), monospace",
-            lineHeight: 1.15,
+            lineHeight: 1.1,
           }}
         >
           {formatPace(result.gapSecPerKm)}/km
@@ -395,28 +457,41 @@ function ExportLayout({
   )
 
   const header = (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+        flexShrink: 0,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: isWall ? 5 : 6, minWidth: 0 }}>
         <span
           style={{
-            width: 8,
-            height: 8,
+            width: isWall ? 7 : 8,
+            height: isWall ? 7 : 8,
             borderRadius: 999,
             background: P.primary,
             display: "inline-block",
+            flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.3, color: P.text }}>
+        <span style={{ fontSize: isWall ? 12 : 14, fontWeight: 800, letterSpacing: 0.3, color: P.text }}>
           SimPace
         </span>
-        <span style={{ fontSize: 10, color: P.muted }}>{t(lang, "raceSchedule")}</span>
+        <span style={{ fontSize: isWall ? 9 : 10, color: P.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {t(lang, "raceSchedule")}
+        </span>
       </div>
       <div
         style={{
-          fontSize: 11,
+          fontSize: isWall ? 10 : 11,
           fontWeight: 700,
           fontFamily: "var(--font-geist-mono), monospace",
           color: P.text,
+          flexShrink: 0,
         }}
       >
         {distanceKm} km / +{Math.round(elevationGainM)} m
@@ -425,7 +500,15 @@ function ExportLayout({
   )
 
   const footer = (
-    <div style={{ fontSize: 8, color: P.muted, textAlign: "center", lineHeight: 1 }}>
+    <div
+      style={{
+        fontSize: isWall ? 7 : 8,
+        color: P.muted,
+        textAlign: "center",
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
       Generated by SimPace · {new Date().toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US")}
     </div>
   )
@@ -518,23 +601,30 @@ function ExportLayout({
       }}
     >
       {isWall ? (
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            // Lock-screen safe zones: clock/Dynamic Island on top, home bar/widgets below
-            padding: "132px 16px 100px",
-            gap: 8,
-            boxSizing: "border-box",
-          }}
-        >
-          {header}
-          {body}
-          {footer}
-        </div>
+        <>
+          {/* Clock / Dynamic Island / date widget zone — top 30% */}
+          <div style={{ height: WALL_HEIGHT * WALL_SAFE_TOP, flexShrink: 0 }} />
+          <div
+            style={{
+              height: WALL_HEIGHT * WALL_CONTENT_H,
+              flexShrink: 0,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              paddingLeft: WALL_WIDTH * WALL_PAD_X,
+              paddingRight: WALL_WIDTH * WALL_PAD_X,
+              gap: wallFit!.gap,
+              boxSizing: "border-box",
+              overflow: "hidden",
+            }}
+          >
+            {header}
+            {body}
+            {footer}
+          </div>
+          {/* Home bar / Flashlight / Camera widget zone — bottom 15% */}
+          <div style={{ height: WALL_HEIGHT * WALL_SAFE_BOTTOM, flexShrink: 0 }} />
+        </>
       ) : (
         <>
           {header}
@@ -553,6 +643,8 @@ function Row({
   alt,
   hasCutoff,
   tight,
+  compact,
+  rowHeight,
   palette: P,
 }: {
   cells: string[]
@@ -561,16 +653,38 @@ function Row({
   alt?: boolean
   hasCutoff: boolean
   tight?: boolean
+  compact?: boolean
+  rowHeight?: number
   palette: Palette
 }) {
+  const fontSize = compact
+    ? header
+      ? 8
+      : rowHeight && rowHeight < 14
+        ? 8
+        : 9
+    : header
+      ? 9
+      : tight
+        ? 10
+        : 11
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: hasCutoff ? "1.45fr 0.95fr 0.95fr 0.75fr" : "1.5fr 1fr 0.85fr",
-        gap: 4,
-        padding: tight ? "2px 6px" : "3px 6px",
-        borderRadius: 4,
+        gridTemplateColumns: hasCutoff
+          ? compact
+            ? "1.2fr 1fr 1fr 0.7fr"
+            : "1.45fr 0.95fr 0.95fr 0.75fr"
+          : compact
+            ? "1.35fr 1.05fr 0.8fr"
+            : "1.5fr 1fr 0.85fr",
+        gap: compact ? 2 : 4,
+        padding: compact ? "0 4px" : tight ? "2px 6px" : "3px 6px",
+        height: rowHeight,
+        boxSizing: "border-box",
+        alignItems: "center",
+        borderRadius: compact ? 3 : 4,
         background: header
           ? P.headerBg
           : warn
@@ -578,10 +692,11 @@ function Row({
             : alt
               ? P.altBg
               : "transparent",
-        fontSize: header ? 9 : tight ? 10 : 11,
+        fontSize,
         color: header ? P.muted : P.text,
         fontWeight: header ? 700 : 500,
-        lineHeight: 1.25,
+        lineHeight: compact ? 1.1 : 1.25,
+        minWidth: 0,
       }}
     >
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -595,6 +710,9 @@ function Row({
             fontFamily: "var(--font-geist-mono), monospace",
             color: i === cells.length - 2 ? P.primary : i === 1 && hasCutoff ? P.muted : P.text,
             fontVariantNumeric: "tabular-nums",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
           }}
         >
           {c}
