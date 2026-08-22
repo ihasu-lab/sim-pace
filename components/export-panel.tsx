@@ -214,8 +214,9 @@ function ExportLayout({
 
   const rowH = tight ? 17 : 20
   const scheduleH = 18 + (result.segments.length + 1) * rowH
+  const chartH = isWall ? 132 : 148
   const aidH = aids.length === 0 ? 0 : 20 + aids.length * 15 + 10
-  const rightH = 52 + 8 + 98 + (aidH > 0 ? 8 + aidH : 0)
+  const rightH = 52 + 8 + (chartH + 22) + (aidH > 0 ? 8 + aidH : 0)
   const height = isWall ? 720 : 12 + 22 + 8 + Math.max(scheduleH, rightH, 220) + 24
 
   const chartColors = {
@@ -293,8 +294,10 @@ function ExportLayout({
         distanceKm={distanceKm}
         elevationGainM={elevationGainM}
         waypoints={aids}
-        height={isWall ? 72 : 86}
+        height={chartH}
         colors={chartColors}
+        showWaypointDetails
+        waypointLabel={(w) => localizeName(lang, w.name)}
       />
     </div>
   )

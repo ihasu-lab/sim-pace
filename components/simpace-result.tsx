@@ -94,7 +94,7 @@ export function SimPaceResult({ result, state, lang }: SimPaceResultProps) {
           waypoints={state.waypoints.filter(
             (w) => w.distanceKm > 0 && w.distanceKm < distanceKm,
           )}
-          height={110}
+          height={148}
         />
       </div>
 
