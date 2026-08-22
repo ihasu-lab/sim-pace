@@ -18,6 +18,8 @@ interface ElevationChartProps {
   className?: string
   /** 通過ポイント名と距離・標高をマーカーに表示（書き出し用） */
   showWaypointDetails?: boolean
+  /** Tighter paddings and labels for lock-screen wallpaper density */
+  compact?: boolean
   waypointLabel?: (w: Waypoint) => string
 }
 
@@ -43,16 +45,24 @@ export function ElevationChart({
   colors = DEFAULT_COLORS,
   className,
   showWaypointDetails = false,
+  compact = false,
   waypointLabel,
 }: ElevationChartProps) {
   // 書き出し枠は横長になりやすいので viewBox 幅を抑えて縦方向を使い切る
   const width = showWaypointDetails ? 400 : 580
-  const pad = {
-    top: showWaypointDetails ? 46 : 12,
-    right: 14,
-    bottom: 20,
-    left: 36,
-  }
+  const pad = compact
+    ? {
+        top: showWaypointDetails ? 34 : 10,
+        right: 10,
+        bottom: 16,
+        left: 32,
+      }
+    : {
+        top: showWaypointDetails ? 46 : 12,
+        right: 14,
+        bottom: 20,
+        left: 36,
+      }
 
   const pts = buildPoints(profile, distanceKm, elevationGainM)
   const maxDist = pts[pts.length - 1]?.d || distanceKm || 1
@@ -108,7 +118,7 @@ export function ElevationChart({
             textAnchor="end"
             dominantBaseline="middle"
             fill={colors.text}
-            fontSize={10}
+            fontSize={compact ? 9 : 10}
             fontFamily="ui-monospace, monospace"
           >
             {formatEle(ele)}
@@ -131,7 +141,7 @@ export function ElevationChart({
             y={height - 4}
             textAnchor="middle"
             fill={colors.text}
-            fontSize={10}
+            fontSize={compact ? 9 : 10}
             fontFamily="ui-monospace, monospace"
           >
             {formatKm(d)}
@@ -184,7 +194,7 @@ export function ElevationChart({
         const name = waypointLabel ? waypointLabel(w) : w.name
         const anchor = px < plotLeft + 52 ? "start" : px > plotRight - 52 ? "end" : "middle"
         const tx = anchor === "start" ? px + 4 : anchor === "end" ? px - 4 : px
-        const labelY = 13 + (i % 2) * 20
+        const labelY = compact ? 10 + (i % 2) * 15 : 13 + (i % 2) * 20
         const halo = colors.halo ?? "rgba(0,0,0,0.75)"
         return (
           <g key={w.id}>
@@ -207,16 +217,16 @@ export function ElevationChart({
                 stroke={halo}
                 strokeWidth={3.5}
                 paintOrder="stroke fill"
-                fontSize={11}
+                fontSize={compact ? 9 : 11}
                 fontFamily="ui-sans-serif, system-ui, sans-serif"
               >
                 <tspan x={tx} dy="0" fontWeight={700}>
-                  {truncate(name, 14)}
+                  {truncate(name, compact ? 12 : 14)}
                 </tspan>
                 <tspan
                   x={tx}
-                  dy="12"
-                  fontSize={10}
+                  dy={compact ? 10 : 12}
+                  fontSize={compact ? 8 : 10}
                   fontFamily="ui-monospace, monospace"
                   fontWeight={600}
                 >

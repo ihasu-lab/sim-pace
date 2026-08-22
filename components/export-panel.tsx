@@ -36,6 +36,16 @@ type Palette = {
   chartHalo: string
 }
 
+/** Lock-screen wallpaper canvas: strict 9:16 (1080×1920). */
+const WALL_W = 1080
+const WALL_H = 1920
+/** Horizontal inset so iOS "fill" crop on taller phones does not clip content. */
+const WALL_PAD_X = WALL_W * 0.12
+/** Clock / date widgets occupy the top of the lock screen. */
+const WALL_PAD_TOP = WALL_H * 0.3
+/** Flashlight, camera, and home indicator occupy the bottom. */
+const WALL_PAD_BOTTOM = WALL_H * 0.15
+
 /** 壁紙: 既存のダークテーマ */
 const WALL: Palette = {
   bg: "#111d17",
@@ -104,7 +114,8 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
     setBusy(kind)
     try {
       const url = await toPng(node, {
-        pixelRatio: kind === "wallpaper" ? 3 : 2.5,
+        // 1080×1920 CSS canvas ×2 → 2160×3840 PNG (still 9:16, sharp on 3x phones)
+        pixelRatio: kind === "wallpaper" ? 2 : 2.5,
         cacheBust: true,
         backgroundColor: kind === "card" ? PRINT.bg : WALL.bg,
       })
@@ -222,7 +233,7 @@ export function ExportPanel({ result, state, lang }: ExportPanelProps) {
         aria-hidden="true"
         style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}
       >
-        <div ref={wallpaperRef} style={{ width: 405 }}>
+        <div ref={wallpaperRef} style={{ width: WALL_W, height: WALL_H }}>
           <ExportLayout kind="wallpaper" result={result} state={state} lang={lang} />
         </div>
         <div ref={cardRef} style={{ width: 720 }}>
@@ -248,12 +259,15 @@ function ExportLayout({
   const P = isWall ? WALL : PRINT
   // Wallpaper is a true 9:16 phone frame. Card height is computed from content
   // so the laminated preview is never clipped.
-  const width = isWall ? 405 : 720
+  const width = isWall ? WALL_W : 720
   const distanceKm = Number.parseFloat(state.distance) || 0
   const elevationGainM = Number.parseFloat(state.elevation) || 0
   const isReverse = result.mode === "reverse"
   const hasCutoff = result.segments.some((s) => s.cutoffSec !== null)
-  const tight = result.segments.length > 8
+  const tight = isWall
+    ? result.segments.length > 6
+    : result.segments.length > 8
+  const wallVeryTight = isWall && result.segments.length > 12
 
   const aids = state.waypoints
     .filter((w) => w.distanceKm > 0 && w.distanceKm < distanceKm)
@@ -261,10 +275,10 @@ function ExportLayout({
 
   const rowH = tight ? 17 : 20
   const scheduleH = 18 + (result.segments.length + 1) * rowH
-  const chartH = isWall ? 156 : 172
+  const chartH = isWall ? (wallVeryTight ? 168 : tight ? 196 : 220) : 172
   const aidH = aids.length === 0 ? 0 : 20 + aids.length * 15 + 10
   const rightH = 52 + 8 + (chartH + 22) + (aidH > 0 ? 8 + aidH : 0)
-  const height = isWall ? 720 : 12 + 22 + 8 + Math.max(scheduleH, rightH, 220) + 24
+  const height = isWall ? WALL_H : 12 + 22 + 8 + Math.max(scheduleH, rightH, 220) + 24
 
   const chartColors = {
     line: P.primary,
@@ -284,19 +298,28 @@ function ExportLayout({
     : [t(lang, "colPoint"), t(lang, "colPass"), t(lang, "colGap")]
 
   const schedule = (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: isWall ? undefined : 1 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        flex: 1,
+        overflow: "hidden",
+      }}
+    >
       <div
         style={{
-          fontSize: 11,
+          fontSize: isWall ? 15 : 11,
           fontWeight: 700,
-          marginBottom: 4,
+          marginBottom: isWall ? 6 : 4,
           letterSpacing: 0.2,
+          flexShrink: 0,
         }}
       >
         {scheduleTitle}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        <Row cells={headerCells} header hasCutoff={hasCutoff} tight={tight} palette={P} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 0, minHeight: 0 }}>
+        <Row cells={headerCells} header hasCutoff={hasCutoff} tight={tight} palette={P} wall={isWall} />
         {result.segments.map((s, i) => {
           const stay =
             s.stayMin > 0 ? ` · ${t(lang, "stay")}${s.stayMin}${t(lang, "minute")}` : ""
@@ -318,6 +341,7 @@ function ExportLayout({
               warn={s.marginSec !== null && s.marginSec < 0}
               alt={i % 2 === 1}
               palette={P}
+              wall={isWall}
             />
           )
         })}
@@ -330,11 +354,19 @@ function ExportLayout({
       style={{
         background: P.card,
         borderRadius: 10,
-        padding: isWall ? "6px 8px 4px" : "6px 8px 4px",
+        padding: isWall ? "5px 8px 3px" : "6px 8px 4px",
         border: `1px solid ${P.border}`,
+        flexShrink: 0,
       }}
     >
-      <div style={{ fontSize: 10, color: P.muted, marginBottom: 2, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: isWall ? 13 : 10,
+          color: P.muted,
+          marginBottom: 2,
+          fontWeight: 700,
+        }}
+      >
         {t(lang, "elevationProfile")}
       </div>
       <ElevationChart
@@ -345,6 +377,7 @@ function ExportLayout({
         height={chartH}
         colors={chartColors}
         showWaypointDetails
+        compact={isWall}
         waypointLabel={(w) => localizeName(lang, w.name)}
       />
     </div>
@@ -358,19 +391,20 @@ function ExportLayout({
         justifyContent: "space-between",
         background: P.card,
         borderRadius: 10,
-        padding: isWall ? "8px 12px" : "8px 12px",
+        padding: isWall ? "8px 14px" : "8px 12px",
         border: `1px solid ${P.border}`,
         gap: 12,
+        flexShrink: 0,
       }}
     >
       <div>
-        <div style={{ fontSize: 9, color: P.muted, lineHeight: 1.2 }}>{timeLabel}</div>
+        <div style={{ fontSize: isWall ? 13 : 9, color: P.muted, lineHeight: 1.2 }}>{timeLabel}</div>
         <div
           style={{
-            fontSize: isWall ? 26 : 22,
+            fontSize: isWall ? 36 : 22,
             fontWeight: 800,
             fontFamily: "var(--font-geist-mono), monospace",
-            lineHeight: 1.15,
+            lineHeight: 1.1,
             color: P.text,
           }}
         >
@@ -378,10 +412,10 @@ function ExportLayout({
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: 9, color: P.muted, lineHeight: 1.2 }}>{gapLabel}</div>
+        <div style={{ fontSize: isWall ? 13 : 9, color: P.muted, lineHeight: 1.2 }}>{gapLabel}</div>
         <div
           style={{
-            fontSize: isWall ? 16 : 15,
+            fontSize: isWall ? 20 : 15,
             fontWeight: 700,
             color: P.primary,
             fontFamily: "var(--font-geist-mono), monospace",
@@ -395,7 +429,14 @@ function ExportLayout({
   )
 
   const header = (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexShrink: 0,
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <span
           style={{
@@ -406,14 +447,23 @@ function ExportLayout({
             display: "inline-block",
           }}
         />
-        <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.3, color: P.text }}>
+        <span
+          style={{
+            fontSize: isWall ? 22 : 14,
+            fontWeight: 800,
+            letterSpacing: 0.3,
+            color: P.text,
+          }}
+        >
           SimPace
         </span>
-        <span style={{ fontSize: 10, color: P.muted }}>{t(lang, "raceSchedule")}</span>
+        <span style={{ fontSize: isWall ? 14 : 10, color: P.muted }}>
+          {t(lang, "raceSchedule")}
+        </span>
       </div>
       <div
         style={{
-          fontSize: 11,
+          fontSize: isWall ? 16 : 11,
           fontWeight: 700,
           fontFamily: "var(--font-geist-mono), monospace",
           color: P.text,
@@ -425,17 +475,34 @@ function ExportLayout({
   )
 
   const footer = (
-    <div style={{ fontSize: 8, color: P.muted, textAlign: "center", lineHeight: 1 }}>
+    <div
+      style={{
+        fontSize: isWall ? 12 : 8,
+        color: P.muted,
+        textAlign: "center",
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
       Generated by SimPace · {new Date().toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US")}
     </div>
   )
 
   const body = isWall ? (
-    <>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        flex: 1,
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
       {timeStrip}
       {profile}
       {schedule}
-    </>
+    </div>
   ) : (
     <div
       style={{
@@ -522,13 +589,15 @@ function ExportLayout({
           style={{
             flex: 1,
             minHeight: 0,
+            height: "100%",
             display: "flex",
             flexDirection: "column",
-            justifyContent: "center",
-            // Lock-screen safe zones: clock/Dynamic Island on top, home bar/widgets below
-            padding: "132px 16px 100px",
+            justifyContent: "flex-start",
+            // Lock-screen safe zones: top 30% clock, 12% L/R crop, bottom 15% widgets
+            padding: `${WALL_PAD_TOP}px ${WALL_PAD_X}px ${WALL_PAD_BOTTOM}px`,
             gap: 8,
             boxSizing: "border-box",
+            overflow: "hidden",
           }}
         >
           {header}
@@ -554,6 +623,7 @@ function Row({
   hasCutoff,
   tight,
   palette: P,
+  wall,
 }: {
   cells: string[]
   header?: boolean
@@ -562,14 +632,26 @@ function Row({
   hasCutoff: boolean
   tight?: boolean
   palette: Palette
+  wall?: boolean
 }) {
+  const fontSize = wall
+    ? header
+      ? 12
+      : tight
+        ? 13
+        : 14
+    : header
+      ? 9
+      : tight
+        ? 10
+        : 11
   return (
     <div
       style={{
         display: "grid",
         gridTemplateColumns: hasCutoff ? "1.45fr 0.95fr 0.95fr 0.75fr" : "1.5fr 1fr 0.85fr",
-        gap: 4,
-        padding: tight ? "2px 6px" : "3px 6px",
+        gap: wall ? 6 : 4,
+        padding: wall ? (tight ? "2px 6px" : "3px 8px") : tight ? "2px 6px" : "3px 6px",
         borderRadius: 4,
         background: header
           ? P.headerBg
@@ -578,10 +660,10 @@ function Row({
             : alt
               ? P.altBg
               : "transparent",
-        fontSize: header ? 9 : tight ? 10 : 11,
+        fontSize,
         color: header ? P.muted : P.text,
         fontWeight: header ? 700 : 500,
-        lineHeight: 1.25,
+        lineHeight: wall ? 1.15 : 1.25,
       }}
     >
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
